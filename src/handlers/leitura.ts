@@ -33,9 +33,30 @@ export function registrarLeitura(bot: Bot) {
 
     const footer = `\n\n─ Parte ${pagina + 1} de ${total} ─`
 
+    const ultimaPagina = pagina === total - 1
+
+    // Se é a última página e pertence a uma coleção, busca o próximo conto
+    let proximoPost: { id: string; title: string } | null = null
+    if (ultimaPagina && post.novel_id) {
+      const { data: proximo } = await supabase
+        .from('posts_pt')
+        .select('id, title')
+        .eq('novel_id', post.novel_id)
+        .eq('draft', false)
+        .gt('chapter', post.chapter ?? 0)
+        .order('chapter')
+        .limit(1)
+        .single()
+
+      proximoPost = proximo ?? null
+    }
+
     const kb = new InlineKeyboard()
     if (pagina > 0) kb.text('⬅️', `ler:${postId}:${pagina - 1}`)
-    if (pagina < total - 1) kb.text('➡️', `ler:${postId}:${pagina + 1}`)
+    if (!ultimaPagina) kb.text('➡️', `ler:${postId}:${pagina + 1}`)
+    if (proximoPost) {
+      kb.row().text(`Continuar: ${proximoPost.title} ➡️`, `ler:${proximoPost.id}:0`)
+    }
     kb.row().text('🏠 Início', 'inicio')
 
     await ctx.answerCallbackQuery()
