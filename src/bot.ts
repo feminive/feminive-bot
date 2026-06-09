@@ -21,9 +21,7 @@ registrarBoasVindas(bot)
 // Botão de início (volta ao menu principal)
 bot.callbackQuery('inicio', async (ctx) => {
   const kb = new InlineKeyboard()
-    .text('📖 Novelas', 'novelas:0')
-    .text('📝 Contos', 'contos_menu')
-    .row()
+    .text('📝 Contos', 'temas')
     .text('🎲 Surpreenda-me', 'surpresa')
 
   await ctx.answerCallbackQuery()
