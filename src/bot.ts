@@ -6,6 +6,7 @@ import { registrarNovelas } from './handlers/novelas.js'
 import { registrarContos } from './handlers/contos.js'
 import { registrarLeitura } from './handlers/leitura.js'
 import { registrarSurpresa } from './handlers/surpresa.js'
+import { registrarBoasVindas } from './handlers/boasvindas.js'
 
 const bot = new Bot(process.env.BOT_TOKEN!)
 
@@ -15,6 +16,7 @@ registrarNovelas(bot)
 registrarContos(bot)
 registrarLeitura(bot)
 registrarSurpresa(bot)
+registrarBoasVindas(bot)
 
 // Botão de início (volta ao menu principal)
 bot.callbackQuery('inicio', async (ctx) => {
@@ -35,19 +37,22 @@ bot.catch((err) => {
   console.error('Erro no bot:', err)
 })
 
-// Webhook para produção (VPS)
-const PORT = parseInt(process.env.PORT ?? '3000')
-const handleUpdate = webhookCallback(bot, 'http')
+if (process.env.NODE_ENV === 'production') {
+  const PORT = parseInt(process.env.PORT ?? '3000')
+  const handleUpdate = webhookCallback(bot, 'http')
 
-const server = createServer(async (req, res) => {
-  if (req.method === 'POST' && req.url === '/webhook') {
-    await handleUpdate(req, res)
-  } else {
-    res.writeHead(200).end('OK')
-  }
-})
+  const server = createServer(async (req, res) => {
+    if (req.method === 'POST' && req.url === '/webhook') {
+      await handleUpdate(req, res)
+    } else {
+      res.writeHead(200).end('OK')
+    }
+  })
 
-server.listen(PORT, () => {
-  console.log(`Bot rodando na porta ${PORT}`)
-  console.log(`Configure o webhook: https://api.telegram.org/bot{TOKEN}/setWebhook?url={SEU_DOMINIO}/webhook`)
-})
+  server.listen(PORT, () => {
+    console.log(`Bot rodando na porta ${PORT}`)
+  })
+} else {
+  bot.start({ allowed_updates: ['message', 'callback_query', 'chat_member'] })
+  console.log('Bot rodando em modo polling (dev)')
+}
