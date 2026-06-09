@@ -3,21 +3,35 @@ import { supabase } from '../lib/supabase.js'
 
 const POR_PAGINA = 10
 
-export function registrarContos(bot: Bot) {
-  // Menu: Coleções ou Avulsos
-  bot.callbackQuery('contos_menu', async (ctx) => {
-    const kb = new InlineKeyboard()
-      .text('📚 Coleções', 'colecoes:0')
-      .row()
-      .text('📄 Avulsos por tema', 'temas')
-      .row()
-      .text('🏠 Início', 'inicio')
+async function mostrarTemas(ctx: any) {
+  const { data: categorias } = await supabase
+    .from('short_categories')
+    .select('id, title, slug')
+    .eq('locale', 'pt')
+    .order('sort_order')
 
+  if (!categorias?.length) {
+    await ctx.editMessageText('Nenhum tema encontrado.')
+    return
+  }
+
+  const kb = new InlineKeyboard()
+  for (const cat of categorias) {
+    kb.text(cat.title, `tema:${cat.id}`).row()
+  }
+  kb.text('🏠 Início', 'inicio')
+
+  await ctx.editMessageText('📝 *Escolha um tema:*', {
+    parse_mode: 'Markdown',
+    reply_markup: kb,
+  })
+}
+
+export function registrarContos(bot: Bot) {
+  // Contos curtos → direto para temas
+  bot.callbackQuery('contos_menu', async (ctx) => {
     await ctx.answerCallbackQuery()
-    await ctx.editMessageText('📝 *Contos* — como prefere explorar?', {
-      parse_mode: 'Markdown',
-      reply_markup: kb,
-    })
+    await mostrarTemas(ctx)
   })
 
   // Lista de coleções (novels sem seasons / com category_slug)
@@ -72,7 +86,7 @@ export function registrarContos(bot: Bot) {
 
     const { data: contos } = await supabase
       .from('posts_pt')
-      .select('id, title')
+      .select('id, title, telegram_premium')
       .eq('novel_id', novelaId)
       .eq('draft', false)
       .order('published_at')
@@ -85,7 +99,8 @@ export function registrarContos(bot: Bot) {
 
     const kb = new InlineKeyboard()
     for (const c of contos) {
-      kb.text(c.title, `ler:${c.id}:0`).row()
+      const label = c.telegram_premium ? `🔒 ${c.title}` : c.title
+      kb.text(label, `ler:${c.id}:0`).row()
     }
 
     const nav = new InlineKeyboard()
@@ -102,29 +117,8 @@ export function registrarContos(bot: Bot) {
 
   // Lista de temas
   bot.callbackQuery('temas', async (ctx) => {
-    const { data: categorias } = await supabase
-      .from('short_categories')
-      .select('id, title, slug')
-      .eq('locale', 'pt')
-      .order('sort_order')
-
-    if (!categorias?.length) {
-      await ctx.answerCallbackQuery()
-      await ctx.editMessageText('Nenhum tema encontrado.')
-      return
-    }
-
-    const kb = new InlineKeyboard()
-    for (const cat of categorias) {
-      kb.text(cat.title, `tema:${cat.id}`).row()
-    }
-    kb.text('🏠 Início', 'inicio')
-
     await ctx.answerCallbackQuery()
-    await ctx.editMessageText('📝 *Escolha um tema:*', {
-      parse_mode: 'Markdown',
-      reply_markup: kb,
-    })
+    await mostrarTemas(ctx)
   })
 
   // Conteúdo de um tema — coleções e avulsos juntos numa lista só
@@ -142,7 +136,7 @@ export function registrarContos(bot: Bot) {
         .eq('hide', false)
         .order('title'),
       supabase.from('posts_pt')
-        .select('id, title')
+        .select('id, title, telegram_premium')
         .eq('short_category_id', catId)
         .is('novel_id', null)
         .eq('draft', false)
@@ -150,7 +144,7 @@ export function registrarContos(bot: Bot) {
     ])
 
     // Monta lista unificada: coleções primeiro, depois avulsos
-    type Item = { id: string; title: string; tipo: 'colecao' | 'avulso' }
+    type Item = { id: string; title: string; tipo: 'colecao' | 'avulso'; telegram_premium?: boolean | null }
     const todos: Item[] = [
       ...(colecoes ?? []).map(c => ({ ...c, tipo: 'colecao' as const })),
       ...(avulsos ?? []).map(c => ({ ...c, tipo: 'avulso' as const })),
@@ -165,7 +159,7 @@ export function registrarContos(bot: Bot) {
 
     const kb = new InlineKeyboard()
     for (const item of pagina_items) {
-      const prefixo = item.tipo === 'colecao' ? '📚 ' : ''
+      const prefixo = item.tipo === 'colecao' ? '📚 ' : (item.telegram_premium ? '🔒 ' : '')
       const destino = item.tipo === 'colecao' ? `colecao:${item.id}:0` : `ler:${item.id}:0`
       kb.text(prefixo + item.title, destino).row()
     }
@@ -192,10 +186,10 @@ export function registrarContos(bot: Bot) {
     const [{ data: cat }, { data: colecoes }, { data: avulsos }] = await Promise.all([
       supabase.from('short_categories').select('title').eq('id', catId).single(),
       supabase.from('novels_pt').select('id, title').eq('short_category_id', catId).eq('draft', false).eq('hide', false).order('title'),
-      supabase.from('posts_pt').select('id, title').eq('short_category_id', catId).is('novel_id', null).eq('draft', false).order('published_at', { ascending: false }),
+      supabase.from('posts_pt').select('id, title, telegram_premium').eq('short_category_id', catId).is('novel_id', null).eq('draft', false).order('published_at', { ascending: false }),
     ])
 
-    type Item = { id: string; title: string; tipo: 'colecao' | 'avulso' }
+    type Item = { id: string; title: string; tipo: 'colecao' | 'avulso'; telegram_premium?: boolean | null }
     const todos: Item[] = [
       ...(colecoes ?? []).map(c => ({ ...c, tipo: 'colecao' as const })),
       ...(avulsos ?? []).map(c => ({ ...c, tipo: 'avulso' as const })),
@@ -210,7 +204,7 @@ export function registrarContos(bot: Bot) {
 
     const kb = new InlineKeyboard()
     for (const item of pagina_items) {
-      const prefixo = item.tipo === 'colecao' ? '📚 ' : ''
+      const prefixo = item.tipo === 'colecao' ? '📚 ' : (item.telegram_premium ? '🔒 ' : '')
       const destino = item.tipo === 'colecao' ? `colecao:${item.id}:0` : `ler:${item.id}:0`
       kb.text(prefixo + item.title, destino).row()
     }

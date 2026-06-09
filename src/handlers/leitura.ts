@@ -1,6 +1,7 @@
 import { Bot, InlineKeyboard } from 'grammy'
 import { supabase } from '../lib/supabase.js'
 import { paginarTexto } from '../lib/paginator.js'
+import { usuarioEhAssinante } from './assinante.js'
 
 export function registrarLeitura(bot: Bot) {
   bot.callbackQuery(/^ler:(.+):(\d+)$/, async (ctx) => {
@@ -9,13 +10,33 @@ export function registrarLeitura(bot: Bot) {
 
     const { data: post } = await supabase
       .from('posts_pt')
-      .select('id, title, body, novel_id, chapter')
+      .select('id, title, body, novel_id, chapter, telegram_premium')
       .eq('id', postId)
       .single()
 
     if (!post?.body) {
       await ctx.answerCallbackQuery('Conteúdo não disponível.')
       return
+    }
+
+    if (post.telegram_premium) {
+      const ehAssinante = await usuarioEhAssinante(ctx.from!.id)
+      if (!ehAssinante) {
+        await ctx.answerCallbackQuery('Conteúdo exclusivo 🔒')
+        await ctx.editMessageText(
+          '🔒 *Conteúdo exclusivo para assinantes*\n\n' +
+          'Este capítulo faz parte do nosso acervo premium.\n\n' +
+          'Assine por apenas *R$ 14,90/mês* para ler tudo sem limites. 💕',
+          {
+            parse_mode: 'Markdown',
+            reply_markup: new InlineKeyboard()
+              .text('✅ Já sou assinante', 'ja_sou_assinante').row()
+              .text('💳 Ver planos', 'ver_planos').row()
+              .text('🏠 Início', 'inicio'),
+          }
+        )
+        return
+      }
     }
 
     const paginas = paginarTexto(post.body)

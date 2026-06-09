@@ -7,6 +7,7 @@ import { registrarContos } from './handlers/contos.js'
 import { registrarLeitura } from './handlers/leitura.js'
 import { registrarSurpresa } from './handlers/surpresa.js'
 import { registrarBoasVindas } from './handlers/boasvindas.js'
+import { registrarAssinante } from './handlers/assinante.js'
 
 const bot = new Bot(process.env.BOT_TOKEN!)
 
@@ -17,12 +18,15 @@ registrarContos(bot)
 registrarLeitura(bot)
 registrarSurpresa(bot)
 registrarBoasVindas(bot)
+registrarAssinante(bot)
 
 // Botão de início (volta ao menu principal)
 bot.callbackQuery('inicio', async (ctx) => {
   const kb = new InlineKeyboard()
-    .text('📝 Contos', 'temas')
-    .text('🎲 Surpreenda-me', 'surpresa')
+    .text('📚 Novelas em séries', 'novelas').row()
+    .text('📝 Contos curtos', 'contos_menu').row()
+    .text('🎲 Surpreenda-me', 'surpresa').row()
+    .text('✅ Já sou assinante', 'ja_sou_assinante').text('💳 Ver planos', 'ver_planos')
 
   await ctx.answerCallbackQuery()
   await ctx.editMessageText('✨ *O que você quer ler hoje?*', {
