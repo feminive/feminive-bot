@@ -1,6 +1,6 @@
 import { Bot, InlineKeyboard } from 'grammy'
 
-const BOT_USERNAME = 'feminive_bot'
+const BOT_USERNAME = 'feminivebot'
 
 export function registrarStart(bot: Bot) {
   bot.command('start', async (ctx) => {

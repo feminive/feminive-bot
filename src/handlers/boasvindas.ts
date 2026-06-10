@@ -23,7 +23,7 @@ export function registrarBoasVindas(bot: Bot) {
     const nome = membro.new_chat_member.user.first_name
     const userId = membro.new_chat_member.user.id
 
-    const botaoStart = new InlineKeyboard().url('📖 Começar a ler', `https://t.me/feminive_bot?start=inicio`)
+    const botaoStart = new InlineKeyboard().url('📖 Começar a ler', `https://t.me/feminivebot?start=inicio`)
 
     try {
       await ctx.api.sendMessage(
@@ -37,7 +37,7 @@ export function registrarBoasVindas(bot: Bot) {
         `Seja bem-vinda, *${nome}*! 💕 Clique abaixo para começar a ler no privado:`,
         {
           parse_mode: 'Markdown',
-          reply_markup: new InlineKeyboard().url('📖 Começar a ler', `https://t.me/feminive_bot?start=inicio`),
+          reply_markup: new InlineKeyboard().url('📖 Começar a ler', `https://t.me/feminivebot?start=inicio`),
         }
       )
     }
