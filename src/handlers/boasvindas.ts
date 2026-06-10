@@ -12,11 +12,18 @@ _Novelas com temporadas, contos por tema, surpresas aleatórias e muito mais._`
 export function registrarBoasVindas(bot: Bot) {
   bot.on('chat_member', async (ctx) => {
     const membro = ctx.chatMember
+    console.log('[chat_member]', JSON.stringify({
+      old: membro.old_chat_member.status,
+      new: membro.new_chat_member.status,
+      user: membro.new_chat_member.user.id,
+    }))
 
     // Só dispara quando alguém entra (member ou administrator)
+    const statusEntrou = ['member', 'administrator', 'creator']
+    const statusForaAntes = ['left', 'kicked']
     const entrou =
-      membro.new_chat_member.status === 'member' &&
-      membro.old_chat_member.status !== 'member'
+      statusEntrou.includes(membro.new_chat_member.status) &&
+      statusForaAntes.includes(membro.old_chat_member.status)
 
     if (!entrou) return
 
