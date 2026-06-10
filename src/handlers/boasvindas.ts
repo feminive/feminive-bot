@@ -1,4 +1,4 @@
-import { Bot } from 'grammy'
+import { Bot, InlineKeyboard } from 'grammy'
 
 const MENSAGEM = `👋 Bem-vinda ao *Feminive*!
 
@@ -21,10 +21,25 @@ export function registrarBoasVindas(bot: Bot) {
     if (!entrou) return
 
     const nome = membro.new_chat_member.user.first_name
+    const userId = membro.new_chat_member.user.id
 
-    await ctx.reply(
-      `${MENSAGEM}\n\nSeja bem-vinda, *${nome}*! 💕`,
-      { parse_mode: 'Markdown' }
-    )
+    const botaoStart = new InlineKeyboard().url('📖 Começar a ler', `https://t.me/feminive_bot?start=inicio`)
+
+    try {
+      await ctx.api.sendMessage(
+        userId,
+        `${MENSAGEM}\n\nSeja bem-vinda, *${nome}*! 💕`,
+        { parse_mode: 'Markdown', reply_markup: botaoStart }
+      )
+    } catch {
+      // Usuário nunca abriu o bot — manda no grupo com link
+      await ctx.reply(
+        `Seja bem-vinda, *${nome}*! 💕 Clique abaixo para começar a ler no privado:`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: new InlineKeyboard().url('📖 Começar a ler', `https://t.me/feminive_bot?start=inicio`),
+        }
+      )
+    }
   })
 }
