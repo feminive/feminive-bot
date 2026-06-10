@@ -39,14 +39,7 @@ export function registrarBoasVindas(bot: Bot) {
         { parse_mode: 'Markdown', reply_markup: botaoStart }
       )
     } catch {
-      // Usuário nunca abriu o bot — manda no grupo com link
-      await ctx.reply(
-        `Seja bem-vinda, *${nome}*! 💕 Clique abaixo para começar a ler no privado:`,
-        {
-          parse_mode: 'Markdown',
-          reply_markup: new InlineKeyboard().url('📖 Começar a ler', `https://t.me/feminivebot?start=inicio`),
-        }
-      )
+      // Usuário nunca abriu o bot — silencioso, não posta no grupo
     }
   })
 }

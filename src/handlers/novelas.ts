@@ -1,7 +1,7 @@
 import { Bot, InlineKeyboard } from 'grammy'
 import { supabase } from '../lib/supabase.js'
 
-const POR_PAGINA = 10
+const POR_PAGINA = 30
 const EPISODIOS_POR_TEMPORADA = 20
 
 async function mostrarListaNovelas(ctx: any, pagina: number) {

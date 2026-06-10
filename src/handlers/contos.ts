@@ -1,7 +1,7 @@
 import { Bot, InlineKeyboard } from 'grammy'
 import { supabase } from '../lib/supabase.js'
 
-const POR_PAGINA = 10
+const POR_PAGINA = 30
 
 async function mostrarTemas(ctx: any) {
   const { data: categorias } = await supabase
