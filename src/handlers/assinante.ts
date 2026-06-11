@@ -66,10 +66,16 @@ export function registrarAssinante(bot: Bot) {
     )
   })
 
-  // Recebe o email digitado
-  bot.on('message:text', async (ctx) => {
+  // Recebe o email digitado (passa adiante se não estiver aguardando email deste usuário)
+  bot.on('message:text', async (ctx, next) => {
     const userId = ctx.from?.id
-    if (!userId || !aguardandoEmail.has(userId)) return
+    if (!userId || !aguardandoEmail.has(userId)) return next()
+
+    // Comandos não são email — devolve ao fluxo normal
+    if (ctx.message.text.startsWith('/')) {
+      aguardandoEmail.delete(userId)
+      return next()
+    }
 
     aguardandoEmail.delete(userId)
 
