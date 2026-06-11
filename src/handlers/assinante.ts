@@ -2,7 +2,12 @@ import { Bot, InlineKeyboard } from 'grammy'
 import { supabase } from '../lib/supabase.js'
 import { stripe } from '../lib/stripe.js'
 
-const PLANOS_URL = 'https://www.feminivefanfics.com.br/assinaturas/planos/'
+const PLANOS_URL_BASE = 'https://www.feminivefanfics.com.br/assinaturas/planos/'
+
+// UTM para o GA4 atribuir a origem da compra ao bot do Telegram
+function planosUrl(content: string): string {
+  return `${PLANOS_URL_BASE}?utm_source=telegram&utm_medium=social&utm_campaign=bot_planos&utm_content=${content}`
+}
 
 // Usuários aguardando digitar o email
 const aguardandoEmail = new Set<number>()
@@ -55,7 +60,7 @@ export function registrarAssinante(bot: Bot) {
       {
         parse_mode: 'Markdown',
         reply_markup: new InlineKeyboard()
-          .url('🔗 Ver planos', PLANOS_URL).row()
+          .url('🔗 Ver planos', planosUrl('menu_ver_planos')).row()
           .text('🏠 Início', 'inicio'),
       }
     )
@@ -93,7 +98,7 @@ export function registrarAssinante(bot: Bot) {
           parse_mode: 'Markdown',
           reply_markup: new InlineKeyboard()
             .text('🔁 Tentar outro email', 'ja_sou_assinante').row()
-            .url('💳 Ver planos', PLANOS_URL).row()
+            .url('💳 Ver planos', planosUrl('email_sem_assinatura')).row()
             .text('🏠 Início', 'inicio'),
         }
       )
