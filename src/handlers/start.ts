@@ -1,9 +1,28 @@
 import { Bot, InlineKeyboard } from 'grammy'
+import { montarLeitura } from './leitura.js'
 
-const BOT_USERNAME = 'feminivebot'
+export const BOT_USERNAME = 'feminivebot'
 
 export function registrarStart(bot: Bot) {
   bot.command('start', async (ctx) => {
+    const payload = (ctx.match ?? '').trim()
+
+    // Deep link vindo do canal: /start ler_<id> abre o conto direto
+    const deepLinkLer = payload.match(/^ler_(.+)$/)
+    if (deepLinkLer && ctx.chat.type === 'private') {
+      const leitura = await montarLeitura(deepLinkLer[1], 0, ctx.from!.id)
+
+      if (leitura.ok) {
+        try {
+          await ctx.reply(leitura.texto, { parse_mode: 'Markdown', reply_markup: leitura.kb })
+        } catch {
+          await ctx.reply(leitura.texto.replace(/\*/g, ''), { reply_markup: leitura.kb })
+        }
+        return
+      }
+      // Conto não encontrado — cai no menu normal
+    }
+
     const kb = new InlineKeyboard()
       .text('📚 Novelas em séries', 'novelas').row()
       .text('📝 Contos curtos', 'contos_menu').row()
