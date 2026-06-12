@@ -25,7 +25,9 @@ export async function postarSugestao(bot: Bot) {
   ultimosPostados.push(sorteado.id)
   if (ultimosPostados.length > HISTORICO_MAX) ultimosPostados.shift()
 
-  const teaser = sorteado.description?.trim()
+  // Alguns posts têm o placeholder literal "description" no banco — trata como vazio
+  let teaser = sorteado.description?.trim()
+  if (teaser?.toLowerCase() === 'description') teaser = undefined
   const texto =
     `📖 *Sugestão de leitura*\n\n*${sorteado.title}*` +
     (teaser ? `\n\n_${teaser}_` : '')
