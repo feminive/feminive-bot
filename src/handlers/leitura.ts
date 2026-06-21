@@ -2,12 +2,18 @@ import { Bot, InlineKeyboard } from 'grammy'
 import { supabase } from '../lib/supabase.js'
 import { paginarTexto } from '../lib/paginator.js'
 import { usuarioEhAssinante } from './assinante.js'
+import { registrarLeituraEvento, type OrigemLeitura } from '../lib/tracking.js'
 
 type Leitura =
   | { ok: true; texto: string; kb: InlineKeyboard; aviso?: string }
   | { ok: false; motivo: string }
 
-export async function montarLeitura(postId: string, pagina: number, userId: number): Promise<Leitura> {
+export async function montarLeitura(
+  postId: string,
+  pagina: number,
+  userId: number,
+  origem: OrigemLeitura = 'bot'
+): Promise<Leitura> {
   const { data: post } = await supabase
     .from('posts_pt')
     .select('id, title, body, novel_id, chapter, telegram_premium')
@@ -21,6 +27,7 @@ export async function montarLeitura(postId: string, pagina: number, userId: numb
   if (post.telegram_premium) {
     const ehAssinante = await usuarioEhAssinante(userId)
     if (!ehAssinante) {
+      registrarLeituraEvento(userId, postId, pagina, origem, true)
       return {
         ok: true,
         aviso: 'Conteúdo exclusivo 🔒',
@@ -43,6 +50,8 @@ export async function montarLeitura(postId: string, pagina: number, userId: numb
   if (!texto) {
     return { ok: false, motivo: 'Página inválida.' }
   }
+
+  registrarLeituraEvento(userId, postId, pagina, origem, false)
 
   const header = pagina === 0
     ? `*${post.title}*\n${'─'.repeat(30)}\n\n`

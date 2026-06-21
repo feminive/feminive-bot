@@ -10,8 +10,22 @@ import { registrarBoasVindas } from './handlers/boasvindas.js'
 import { registrarAssinante } from './handlers/assinante.js'
 import { registrarCanal } from './handlers/canal.js'
 import { registrarDivulgacao } from './handlers/divulgacao.js'
+import { registrarStats } from './handlers/stats.js'
+import { registrarAvisar } from './handlers/avisar.js'
+import { registrarComandos } from './handlers/comandos.js'
+import { registrarPainel } from './handlers/painel.js'
+import { registrarUsuario } from './lib/usuarios.js'
 
 const bot = new Bot(process.env.BOT_TOKEN!)
+
+// Registra todo usuário que fala com o bot no privado (lista do broadcast).
+// Precisa vir antes dos handlers para capturar qualquer mensagem.
+bot.use(async (ctx, next) => {
+  if (ctx.chat?.type === 'private' && ctx.from) {
+    registrarUsuario(ctx.from.id, ctx.from.username, ctx.from.first_name)
+  }
+  await next()
+})
 
 // Handlers
 registrarStart(bot)
@@ -23,6 +37,10 @@ registrarBoasVindas(bot)
 registrarAssinante(bot)
 registrarCanal(bot)
 registrarDivulgacao(bot)
+registrarStats(bot)
+registrarAvisar(bot)
+registrarComandos(bot)
+registrarPainel(bot)
 
 // Botão de início (volta ao menu principal)
 bot.callbackQuery('inicio', async (ctx) => {

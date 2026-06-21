@@ -117,7 +117,7 @@ export function registrarAssinante(bot: Bot) {
       .upsert({ telegram_user_id: userId, email, vinculado_em: new Date().toISOString() })
 
     await ctx.reply(
-      '✅ *Acesso liberado!*\n\nBem-vinda de volta! Agora você tem acesso a todo o conteúdo premium. 💕',
+      '✅ *Acesso liberado!*\n\nQue bom ter você de volta! Agora você tem acesso a todo o conteúdo premium. 💕',
       {
         parse_mode: 'Markdown',
         reply_markup: new InlineKeyboard()

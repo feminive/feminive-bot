@@ -10,7 +10,7 @@ export function registrarStart(bot: Bot) {
     // Deep link vindo do canal: /start ler_<id> abre o conto direto
     const deepLinkLer = payload.match(/^ler_(.+)$/)
     if (deepLinkLer && ctx.chat.type === 'private') {
-      const leitura = await montarLeitura(deepLinkLer[1], 0, ctx.from!.id)
+      const leitura = await montarLeitura(deepLinkLer[1], 0, ctx.from!.id, 'canal')
 
       if (leitura.ok) {
         try {
@@ -29,7 +29,7 @@ export function registrarStart(bot: Bot) {
       .text('🎲 Surpreenda-me', 'surpresa').row()
       .text('✅ Já sou assinante', 'ja_sou_assinante').text('💳 Ver planos', 'ver_planos')
 
-    const mensagem = '✨ *Bem-vinda ao Feminive!*\n\nO que você quer ler hoje?'
+    const mensagem = '✨ *Que bom ter você no Feminive!*\n\nO que você quer ler hoje?'
     const isGrupo = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup'
 
     if (!isGrupo) {

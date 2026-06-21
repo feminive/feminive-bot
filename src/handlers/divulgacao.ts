@@ -4,7 +4,7 @@ import { BOT_USERNAME } from './start.js'
 
 const ADMIN_USER_ID = parseInt(process.env.ADMIN_USER_ID ?? '0', 10)
 const CANAL_ID = process.env.CANAL_ID ?? ''
-const INTERVALO_MS = 2 * 60 * 60 * 1000 // 2 horas
+const INTERVALO_MS = 4 * 60 * 60 * 1000 // 4 horas
 const HISTORICO_MAX = 10 // não repete os últimos N contos sorteados
 
 const ultimosPostados: string[] = []
@@ -65,7 +65,7 @@ export function registrarDivulgacao(bot: Bot) {
     }
   })
 
-  // Agendador: uma sugestão a cada 2 horas
+  // Agendador: uma sugestão a cada 4 horas
   if (!CANAL_ID) {
     console.warn('CANAL_ID não definido — divulgação automática desativada.')
     return
