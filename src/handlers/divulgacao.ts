@@ -87,7 +87,7 @@ export async function postarSugestao(bot: Bot) {
 }
 
 export function registrarDivulgacao(bot: Bot) {
-  // /sugerir — admin dispara uma sugestão na hora (para testar) ou busca por nome
+  // /sugerir — admin dispara uma sugestão na hora (para testar)
   bot.command('sugerir', async (ctx) => {
     if (ctx.chat.type !== 'private') return
     if (!ADMIN_USER_ID || ctx.from?.id !== ADMIN_USER_ID) return
@@ -98,83 +98,8 @@ export function registrarDivulgacao(bot: Bot) {
     }
 
     try {
-      const termo = ctx.match?.trim()
-
-      if (termo) {
-        // Busca por nome/parte do nome
-        const { data: posts } = await supabase
-          .from('posts_pt')
-          .select('id, title, description, novel_id, short_category_id, slug, category_slug')
-          .eq('draft', false)
-          .ilike('title', `%${termo}%`)
-          .limit(5)
-
-        if (!posts?.length) {
-          await ctx.reply(`❌ Nenhum conto encontrado com "${termo}"`)
-          return
-        }
-
-        const post = posts[0]
-        const teaser = post.description?.trim()
-
-        // Busca a imagem
-        let imageUrl: string | undefined
-
-        if (post.novel_id) {
-          const { data: novela } = await supabase
-            .from('novels_pt')
-            .select('image_url')
-            .eq('id', post.novel_id)
-            .single()
-          imageUrl = novela?.image_url ?? undefined
-        } else if (post.short_category_id) {
-          const { data: tema } = await supabase
-            .from('short_categories')
-            .select('image_url')
-            .eq('id', post.short_category_id)
-            .single()
-          imageUrl = tema?.image_url ?? undefined
-        }
-
-        const texto =
-          `📖 *${post.title}*` + (teaser ? `\n\n_${teaser}_` : '')
-
-        const kb = new InlineKeyboard().url(
-          '👀 Você já leu esse conto?',
-          `https://t.me/${BOT_USERNAME}?start=ler_${post.id}`
-        )
-
-        if (imageUrl) {
-          try {
-            await bot.api.sendPhoto(CANAL_ID, imageUrl, {
-              caption: texto,
-              parse_mode: 'Markdown',
-              reply_markup: kb,
-            })
-          } catch {
-            try {
-              await bot.api.sendPhoto(CANAL_ID, imageUrl, {
-                caption: texto.replace(/[*_]/g, ''),
-                reply_markup: kb,
-              })
-            } catch {
-              await bot.api.sendMessage(CANAL_ID, texto, { parse_mode: 'Markdown', reply_markup: kb })
-            }
-          }
-        } else {
-          try {
-            await bot.api.sendMessage(CANAL_ID, texto, { parse_mode: 'Markdown', reply_markup: kb })
-          } catch {
-            await bot.api.sendMessage(CANAL_ID, texto.replace(/[*_]/g, ''), { reply_markup: kb })
-          }
-        }
-
-        await ctx.reply('✅ Sugestão publicada no canal!')
-      } else {
-        // Se não passar argumento, sorteia como antes
-        await postarSugestao(bot)
-        await ctx.reply('✅ Sugestão publicada no canal!')
-      }
+      await postarSugestao(bot)
+      await ctx.reply('✅ Sugestão publicada no canal!')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'desconhecido'
       await ctx.reply(`❌ Erro ao publicar: ${msg}`)
