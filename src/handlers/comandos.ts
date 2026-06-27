@@ -20,6 +20,7 @@ export function registrarComandos(bot: Bot) {
       '',
       '*Publicar no canal*',
       '🗣 */falar <texto>* — publica a mensagem no canal em nome do bot (Markdown suportado).',
+      '📖 */botao* — escreva a mensagem aqui no privado e *responda* a ela com /botao: o bot copia pro canal com um botão que abre o bot no privado de quem clicar (pra quem ainda não falou com o bot começar). Também aceita /botao <texto> direto.',
       '🎲 */sugerir* — publica agora uma sugestão de conto aleatório no canal.',
       '',
       '*Mensagem no privado de todos*',

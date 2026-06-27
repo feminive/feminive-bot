@@ -6,7 +6,7 @@ import { registrarNovelas } from './handlers/novelas.js'
 import { registrarContos } from './handlers/contos.js'
 import { registrarLeitura } from './handlers/leitura.js'
 import { registrarSurpresa } from './handlers/surpresa.js'
-import { registrarBoasVindas } from './handlers/boasvindas.js'
+// import { registrarBoasVindas } from './handlers/boasvindas.js' // PAUSADO
 import { registrarAssinante } from './handlers/assinante.js'
 import { registrarCanal } from './handlers/canal.js'
 import { registrarDivulgacao } from './handlers/divulgacao.js'
@@ -33,7 +33,7 @@ registrarNovelas(bot)
 registrarContos(bot)
 registrarLeitura(bot)
 registrarSurpresa(bot)
-registrarBoasVindas(bot)
+// registrarBoasVindas(bot) // PAUSADO a pedido — sem boas-vindas por enquanto
 registrarAssinante(bot)
 registrarCanal(bot)
 registrarDivulgacao(bot)
