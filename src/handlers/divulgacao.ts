@@ -86,18 +86,6 @@ export async function postarSugestao(bot: Bot) {
   }
 }
 
-function construirUrlSite(post: any, novelaSlug?: string): string {
-  const siteUrl = process.env.SITE_URL ?? 'https://feminive-fanfics-br.vercel.app'
-  const categorySlug = post.category_slug?.trim() || 'geral'
-  const postSlug = post.slug?.trim() || ''
-
-  if (post.novel_id && novelaSlug) {
-    return `${siteUrl}/contos/${categorySlug}/${novelaSlug}/${postSlug}/`
-  }
-
-  return `${siteUrl}/contos/${categorySlug}/avulsos/${postSlug}/`
-}
-
 export function registrarDivulgacao(bot: Bot) {
   // /sugerir — admin dispara uma sugestão na hora (para testar) ou busca por nome
   bot.command('sugerir', async (ctx) => {
@@ -131,16 +119,14 @@ export function registrarDivulgacao(bot: Bot) {
 
         // Busca a imagem
         let imageUrl: string | undefined
-        let novelaSlug: string | undefined
 
         if (post.novel_id) {
           const { data: novela } = await supabase
             .from('novels_pt')
-            .select('image_url, slug')
+            .select('image_url')
             .eq('id', post.novel_id)
             .single()
           imageUrl = novela?.image_url ?? undefined
-          novelaSlug = novela?.slug ?? undefined
         } else if (post.short_category_id) {
           const { data: tema } = await supabase
             .from('short_categories')
@@ -150,11 +136,13 @@ export function registrarDivulgacao(bot: Bot) {
           imageUrl = tema?.image_url ?? undefined
         }
 
-        const url = construirUrlSite(post, novelaSlug)
         const texto =
           `📖 *${post.title}*` + (teaser ? `\n\n_${teaser}_` : '')
 
-        const kb = new InlineKeyboard().url('👀 Ler agora', url)
+        const kb = new InlineKeyboard().url(
+          '👀 Você já leu esse conto?',
+          `https://t.me/${BOT_USERNAME}?start=ler_${post.id}`
+        )
 
         if (imageUrl) {
           try {
