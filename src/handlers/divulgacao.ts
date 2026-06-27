@@ -9,18 +9,32 @@ const HISTORICO_MAX = 10 // não repete os últimos N contos sorteados
 
 const ultimosPostados: string[] = []
 
-export async function postarSugestao(bot: Bot) {
-  const { data: posts } = await supabase
-    .from('posts_pt')
-    .select('id, title, description, novel_id, short_category_id')
-    .eq('draft', false)
-    .limit(1000)
+export async function postarSugestao(bot: Bot, postId?: string) {
+  let sorteado: any
 
-  if (!posts?.length) return
+  if (postId) {
+    const { data: post } = await supabase
+      .from('posts_pt')
+      .select('id, title, description, novel_id, short_category_id')
+      .eq('id', postId)
+      .eq('draft', false)
+      .single()
 
-  const candidatos = posts.filter((p) => !ultimosPostados.includes(p.id))
-  const pool = candidatos.length ? candidatos : posts
-  const sorteado = pool[Math.floor(Math.random() * pool.length)]
+    if (!post) throw new Error('Conto não encontrado')
+    sorteado = post
+  } else {
+    const { data: posts } = await supabase
+      .from('posts_pt')
+      .select('id, title, description, novel_id, short_category_id')
+      .eq('draft', false)
+      .limit(1000)
+
+    if (!posts?.length) return
+
+    const candidatos = posts.filter((p) => !ultimosPostados.includes(p.id))
+    const pool = candidatos.length ? candidatos : posts
+    sorteado = pool[Math.floor(Math.random() * pool.length)]
+  }
 
   ultimosPostados.push(sorteado.id)
   if (ultimosPostados.length > HISTORICO_MAX) ultimosPostados.shift()
@@ -87,7 +101,7 @@ export async function postarSugestao(bot: Bot) {
 }
 
 export function registrarDivulgacao(bot: Bot) {
-  // /sugerir — admin dispara uma sugestão na hora (para testar)
+  // /sugerir — sem argumento sorteia aleatório, com argumento busca e mostra opções
   bot.command('sugerir', async (ctx) => {
     if (ctx.chat.type !== 'private') return
     if (!ADMIN_USER_ID || ctx.from?.id !== ADMIN_USER_ID) return
@@ -98,11 +112,53 @@ export function registrarDivulgacao(bot: Bot) {
     }
 
     try {
-      await postarSugestao(bot)
-      await ctx.reply('✅ Sugestão publicada no canal!')
+      const termo = ctx.match?.trim()
+
+      if (termo) {
+        // Busca contos pelo nome
+        const { data: posts } = await supabase
+          .from('posts_pt')
+          .select('id, title')
+          .ilike('title', `%${termo}%`)
+          .eq('draft', false)
+          .limit(10)
+
+        if (!posts?.length) {
+          await ctx.reply(`❌ Nenhum conto encontrado com "${termo}"`)
+          return
+        }
+
+        // Mostra opções
+        const kb = new InlineKeyboard()
+        for (const post of posts) {
+          kb.text(post.title, `sugerir_${post.id}`).row()
+        }
+
+        await ctx.reply(`📖 Encontrei ${posts.length} resultado(s). Qual você quer?`, {
+          reply_markup: kb,
+        })
+      } else {
+        // Sem argumento, sorteia aleatório
+        await postarSugestao(bot)
+        await ctx.reply('✅ Sugestão publicada no canal!')
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'desconhecido'
-      await ctx.reply(`❌ Erro ao publicar: ${msg}`)
+      await ctx.reply(`❌ Erro: ${msg}`)
+    }
+  })
+
+  // Callback quando clica numa opção
+  bot.callbackQuery(/^sugerir_(.+)$/, async (ctx) => {
+    if (!ADMIN_USER_ID || ctx.from?.id !== ADMIN_USER_ID) return
+
+    try {
+      const postId = ctx.match[1]
+      await postarSugestao(bot, postId)
+      await ctx.answerCallbackQuery('✅ Publicado no canal!')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'desconhecido'
+      await ctx.answerCallbackQuery(`❌ Erro: ${msg}`)
     }
   })
 
