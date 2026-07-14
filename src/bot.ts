@@ -11,7 +11,6 @@ import { registrarAssinante } from './handlers/assinante.js'
 import { registrarCanal } from './handlers/canal.js'
 import { registrarDivulgacao } from './handlers/divulgacao.js'
 import { registrarStats } from './handlers/stats.js'
-import { registrarAvisar } from './handlers/avisar.js'
 import { registrarComandos } from './handlers/comandos.js'
 import { registrarPainel } from './handlers/painel.js'
 import { registrarUsuario } from './lib/usuarios.js'
@@ -38,7 +37,6 @@ registrarAssinante(bot)
 registrarCanal(bot)
 registrarDivulgacao(bot)
 registrarStats(bot)
-registrarAvisar(bot)
 registrarComandos(bot)
 registrarPainel(bot)
 

@@ -19,12 +19,9 @@ export function registrarComandos(bot: Bot) {
       '📈 */stats* — relatório de leituras dos últimos 30 dias (aberturas, top contos, etc.).',
       '',
       '*Publicar no canal*',
-      '🗣 */falar <texto>* — publica a mensagem no canal em nome do bot (Markdown suportado).',
+      '🗣 */falar* — escreva a mensagem aqui no privado e *responda* a ela com /falar: o bot copia pro canal exatamente como está (sem botão). Também aceita /falar <texto> direto.',
       '📖 */botao* — escreva a mensagem aqui no privado e *responda* a ela com /botao: o bot copia pro canal com um botão que abre o bot no privado de quem clicar (pra quem ainda não falou com o bot começar). Também aceita /botao <texto> direto.',
       '🎲 */sugerir* — publica agora uma sugestão de conto aleatório no canal.',
-      '',
-      '*Mensagem no privado de todos*',
-      '📣 */avisar* — responda a uma mensagem com este comando para enviá-la no privado de todos os usuários (com confirmação antes de disparar).',
     ].join('\n')
 
     await ctx.reply(msg, { parse_mode: 'Markdown' })

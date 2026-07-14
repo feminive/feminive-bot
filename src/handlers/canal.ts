@@ -75,7 +75,10 @@ export function registrarCanal(bot: Bot) {
     )
   })
 
-  // /falar <texto> — publica no canal em nome do bot (só no privado, só o admin)
+  // /falar — publica no canal em nome do bot (só no privado, só o admin).
+  // Fluxo principal: escreva a mensagem no privado (pode formatar, pode ter
+  // foto/legenda) e RESPONDA a ela com /falar — o bot copia pro canal como está,
+  // sem botão. Também aceita /falar <texto> direto.
   bot.command('falar', async (ctx) => {
     if (ctx.chat.type !== 'private') return
 
@@ -93,10 +96,26 @@ export function registrarCanal(bot: Bot) {
     // Silencioso para quem não é o admin
     if (userId !== ADMIN_USER_ID) return
 
+    // Caso 1: respondeu a uma mensagem — copia ela pro canal como está.
+    const respondida = ctx.message?.reply_to_message
+    if (respondida) {
+      try {
+        await ctx.api.copyMessage(CANAL_ID, ctx.chat.id, respondida.message_id)
+        await ctx.reply('✅ Publicado no canal!')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'desconhecido'
+        await ctx.reply(
+          `❌ Erro ao publicar: ${msg}\n\nVerifique se o bot é administrador do canal com permissão de postar.`
+        )
+      }
+      return
+    }
+
+    // Caso 2: /falar <texto> direto.
     const texto = (ctx.match ?? '').trim()
     if (!texto) {
       await ctx.reply(
-        '✏️ Use: `/falar sua mensagem`\n\nO texto vai ser publicado no canal exatamente como você escrever (Markdown suportado).',
+        '✏️ *Como usar o /falar:*\n\n1) Escreva aqui no privado a mensagem que você quer publicar (pode formatar, pode ter foto).\n2) *Responda* a essa mensagem com `/falar`.\n\nEu copio ela pro canal exatamente como está.\n\n_Atalho:_ `/falar seu texto aqui` também publica na hora.',
         { parse_mode: 'Markdown' }
       )
       return
