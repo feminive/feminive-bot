@@ -20,8 +20,11 @@ export function registrarComandos(bot: Bot) {
       '',
       '*Publicar no canal*',
       '🗣 */falar* — escreva a mensagem aqui no privado e *responda* a ela com /falar: o bot copia pro canal exatamente como está (sem botão). Também aceita /falar <texto> direto.',
-      '📖 */botao* — escreva a mensagem aqui no privado e *responda* a ela com /botao: o bot copia pro canal com um botão que abre o bot no privado de quem clicar (pra quem ainda não falou com o bot começar). Também aceita /botao <texto> direto.',
+      '📖 */botao* — escreva a mensagem aqui no privado e *responda* a ela com /botao: o bot copia pro canal com um botão que abre o bot no privado de quem clicar (pra quem ainda não falou com o bot começar). Também aceita /botao <texto> direto. Pra um botão com link específico, responda com /botao [texto](link).',
       '🎲 */sugerir* — publica agora uma sugestão de conto aleatório no canal.',
+      '',
+      '*Mandar no privado das leitoras*',
+      '📢 */avisar* — escreva a mensagem aqui no privado e *responda* a ela com /avisar: o bot manda essa mensagem no privado de todo mundo que já falou com ele. Mostra um preview com a contagem e só dispara depois que você confirmar. Pra mandar com botão, responda com /avisar [texto](link).',
     ].join('\n')
 
     await ctx.reply(msg, { parse_mode: 'Markdown' })

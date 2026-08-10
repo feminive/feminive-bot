@@ -13,6 +13,7 @@ import { registrarDivulgacao } from './handlers/divulgacao.js'
 import { registrarStats } from './handlers/stats.js'
 import { registrarComandos } from './handlers/comandos.js'
 import { registrarPainel } from './handlers/painel.js'
+import { registrarAvisar } from './handlers/avisar.js'
 import { registrarUsuario } from './lib/usuarios.js'
 
 const bot = new Bot(process.env.BOT_TOKEN!)
@@ -39,6 +40,7 @@ registrarDivulgacao(bot)
 registrarStats(bot)
 registrarComandos(bot)
 registrarPainel(bot)
+registrarAvisar(bot)
 
 // Botão de início (volta ao menu principal)
 bot.callbackQuery('inicio', async (ctx) => {
