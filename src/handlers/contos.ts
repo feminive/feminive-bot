@@ -27,6 +27,33 @@ async function mostrarTemas(ctx: any) {
   })
 }
 
+// Primeira página de uma coleção como mensagem nova (usada pelo deep link
+// /start colecao_<id> vindo da divulgação no canal)
+export async function montarListaColecao(novelaId: string) {
+  const [{ data: novela }, { data: contos }] = await Promise.all([
+    supabase.from('novels_pt').select('title').eq('id', novelaId).single(),
+    supabase
+      .from('posts_pt')
+      .select('id, title, telegram_premium')
+      .eq('novel_id', novelaId)
+      .eq('draft', false)
+      .order('published_at')
+      .range(0, POR_PAGINA - 1),
+  ])
+
+  if (!novela || !contos?.length) return { ok: false as const }
+
+  const kb = new InlineKeyboard()
+  for (const c of contos) {
+    const label = c.telegram_premium ? `🔒 ${c.title}` : c.title
+    kb.text(label, `ler:${c.id}:0`).row()
+  }
+  if (contos.length === POR_PAGINA) kb.text('Próximos ➡️', `colecao:${novelaId}:1`).row()
+  kb.text('🏠 Início', 'inicio')
+
+  return { ok: true as const, texto: `📚 *${novela.title}*`, kb }
+}
+
 export function registrarContos(bot: Bot) {
   // Contos curtos → direto para temas
   bot.callbackQuery('contos_menu', async (ctx) => {

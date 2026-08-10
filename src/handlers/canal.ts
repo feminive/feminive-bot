@@ -22,13 +22,30 @@ export function registrarCanal(bot: Bot) {
       return
     }
 
-    const kb = new InlineKeyboard().url(
+    const kbPadrao = new InlineKeyboard().url(
       '📖 Começar a ler',
       `https://t.me/${BOT_USERNAME}?start=inicio`
     )
 
     const respondida = ctx.message?.reply_to_message
     const textoInline = (ctx.match ?? '').trim()
+
+    // /botao [texto](link) — usa um botão customizado em vez do padrão.
+    const linkCustom = textoInline.match(/^\[(.+)\]\((https?:\/\/\S+)\)$/)
+    if (linkCustom && !linkCustom[2].includes(' ')) {
+      const [, label, url] = linkCustom
+      try {
+        new URL(url)
+      } catch {
+        await ctx.reply('❌ Link inválido. Use o formato: `/botao [texto](https://...)`', {
+          parse_mode: 'Markdown',
+        })
+        return
+      }
+    }
+    const kb = linkCustom
+      ? new InlineKeyboard().url(linkCustom[1], linkCustom[2])
+      : kbPadrao
 
     // Caso 1: respondeu a uma mensagem — copia ela pro canal com o botão.
     if (respondida) {
@@ -47,6 +64,14 @@ export function registrarCanal(bot: Bot) {
     }
 
     // Caso 2: /botao <texto> direto.
+    if (linkCustom) {
+      await ctx.reply(
+        '✏️ O formato `[texto](link)` só funciona *respondendo* a uma mensagem — ele define o botão, não o texto a publicar.\n\nResponda à mensagem que quer publicar com `/botao [texto](link)`.',
+        { parse_mode: 'Markdown' }
+      )
+      return
+    }
+
     if (textoInline) {
       try {
         await ctx.api.sendMessage(CANAL_ID, textoInline, {
@@ -70,7 +95,7 @@ export function registrarCanal(bot: Bot) {
 
     // Sem resposta e sem texto — explica como usar.
     await ctx.reply(
-      '✏️ *Como usar o /botao:*\n\n1) Escreva aqui no privado a mensagem que você quer publicar (pode formatar, pode ter foto).\n2) *Responda* a essa mensagem com `/botao`.\n\nEu copio ela pro canal já com o botão *📖 Começar a ler*.\n\n_Atalho:_ `/botao seu texto aqui` também publica na hora.',
+      '✏️ *Como usar o /botao:*\n\n1) Escreva aqui no privado a mensagem que você quer publicar (pode formatar, pode ter foto).\n2) *Responda* a essa mensagem com `/botao`.\n\nEu copio ela pro canal já com o botão *📖 Começar a ler*.\n\n_Atalho:_ `/botao seu texto aqui` também publica na hora.\n\n_Botão customizado:_ responda com `/botao [texto](link)` pra usar um texto e link específicos no botão, em vez do padrão.',
       { parse_mode: 'Markdown' }
     )
   })

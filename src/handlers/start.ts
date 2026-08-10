@@ -1,5 +1,6 @@
 import { Bot, InlineKeyboard } from 'grammy'
 import { montarLeitura } from './leitura.js'
+import { montarListaColecao } from './contos.js'
 
 export const BOT_USERNAME = 'feminivebot'
 
@@ -21,6 +22,22 @@ export function registrarStart(bot: Bot) {
         return
       }
       // Conto não encontrado — cai no menu normal
+    }
+
+    // Deep link vindo do canal: /start colecao_<id> lista os contos da coletânea
+    const deepLinkColecao = payload.match(/^colecao_(.+)$/)
+    if (deepLinkColecao && ctx.chat.type === 'private') {
+      const lista = await montarListaColecao(deepLinkColecao[1])
+
+      if (lista.ok) {
+        try {
+          await ctx.reply(lista.texto, { parse_mode: 'Markdown', reply_markup: lista.kb })
+        } catch {
+          await ctx.reply(lista.texto.replace(/\*/g, ''), { reply_markup: lista.kb })
+        }
+        return
+      }
+      // Coletânea não encontrada — cai no menu normal
     }
 
     const kb = new InlineKeyboard()

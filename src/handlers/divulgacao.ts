@@ -9,9 +9,21 @@ const HISTORICO_MAX = 10 // não repete os últimos N contos sorteados
 
 const ultimosPostados: string[] = []
 
-export async function postarSugestao(bot: Bot, postId?: string) {
-  let sorteado: any
+// Alguns registros têm o placeholder literal "description" no banco — trata como vazio
+function limparTeaser(description?: string | null): string | undefined {
+  let teaser = description?.trim()
+  if (!teaser || teaser.toLowerCase() === 'description') return undefined
+  // Legenda de foto no Telegram tem limite de 1024 chars
+  if (teaser.length > 500) teaser = teaser.slice(0, 500).trimEnd() + '…'
+  return teaser
+}
 
+function registrarNoHistorico(chave: string) {
+  ultimosPostados.push(chave)
+  if (ultimosPostados.length > HISTORICO_MAX) ultimosPostados.shift()
+}
+
+export async function postarSugestao(bot: Bot, postId?: string) {
   if (postId) {
     const { data: post } = await supabase
       .from('posts_pt')
@@ -21,55 +33,111 @@ export async function postarSugestao(bot: Bot, postId?: string) {
       .single()
 
     if (!post) throw new Error('Conto não encontrado')
-    sorteado = post
-  } else {
-    const { data: posts } = await supabase
-      .from('posts_pt')
-      .select('id, title, description, novel_id, short_category_id')
-      .eq('draft', false)
-      .limit(1000)
-
-    if (!posts?.length) return
-
-    const candidatos = posts.filter((p) => !ultimosPostados.includes(p.id))
-    const pool = candidatos.length ? candidatos : posts
-    sorteado = pool[Math.floor(Math.random() * pool.length)]
+    registrarNoHistorico(`post:${post.id}`)
+    await publicarPost(bot, post)
+    return
   }
 
-  ultimosPostados.push(sorteado.id)
-  if (ultimosPostados.length > HISTORICO_MAX) ultimosPostados.shift()
+  // Sorteio em dois níveis: primeiro o tipo, depois o item. Sem isso os
+  // capítulos de novela (maioria esmagadora de posts_pt) dominam o sorteio
+  // e avulsos/coletâneas quase nunca saem.
+  const tipos: Array<'coletanea' | 'avulso' | 'capitulo'> = ['coletanea', 'avulso', 'capitulo']
+  tipos.sort(() => Math.random() - 0.5)
 
-  // Alguns posts têm o placeholder literal "description" no banco — trata como vazio
-  let teaser = sorteado.description?.trim()
-  if (teaser?.toLowerCase() === 'description') teaser = undefined
+  for (const tipo of tipos) {
+    let candidatos: any[]
+
+    if (tipo === 'coletanea') {
+      const { data } = await supabase
+        .from('novels_pt')
+        .select('id, title, description, image_url, short_category_id')
+        .eq('draft', false)
+        .eq('hide', false)
+        .not('short_category_id', 'is', null)
+        .limit(1000)
+      candidatos = (data ?? []).map((n) => ({ ...n, chave: `colecao:${n.id}` }))
+    } else {
+      let query = supabase
+        .from('posts_pt')
+        .select('id, title, description, novel_id, short_category_id')
+        .eq('draft', false)
+        .limit(1000)
+      query = tipo === 'avulso' ? query.is('novel_id', null) : query.not('novel_id', 'is', null)
+      const { data } = await query
+      candidatos = (data ?? []).map((p) => ({ ...p, chave: `post:${p.id}` }))
+    }
+
+    if (!candidatos.length) continue // tipo sem conteúdo — tenta o próximo
+
+    const ineditos = candidatos.filter((c) => !ultimosPostados.includes(c.chave))
+    const pool = ineditos.length ? ineditos : candidatos
+    const sorteado = pool[Math.floor(Math.random() * pool.length)]
+
+    registrarNoHistorico(sorteado.chave)
+    if (tipo === 'coletanea') await publicarColetanea(bot, sorteado)
+    else await publicarPost(bot, sorteado)
+    return
+  }
+}
+
+async function publicarPost(bot: Bot, post: any) {
+  const teaser = limparTeaser(post.description)
   const texto =
-    `📖 *Sugestão de leitura*\n\n*${sorteado.title}*` +
+    `📖 *Sugestão de leitura*\n\n*${post.title}*` +
     (teaser ? `\n\n_${teaser}_` : '')
 
   const kb = new InlineKeyboard().url(
     '👀 Você já leu esse conto?',
-    `https://t.me/${BOT_USERNAME}?start=ler_${sorteado.id}`
+    `https://t.me/${BOT_USERNAME}?start=ler_${post.id}`
   )
 
   // A imagem nunca é a do conto em si — vem da novela/coletânea (novels_pt)
   // a que ele pertence ou, se for avulso, do tema (short_categories).
   let imageUrl: string | undefined
-  if (sorteado.novel_id) {
+  if (post.novel_id) {
     const { data: novela } = await supabase
       .from('novels_pt')
       .select('image_url')
-      .eq('id', sorteado.novel_id)
+      .eq('id', post.novel_id)
       .single()
     imageUrl = novela?.image_url ?? undefined
-  } else if (sorteado.short_category_id) {
+  } else if (post.short_category_id) {
     const { data: tema } = await supabase
       .from('short_categories')
       .select('image_url')
-      .eq('id', sorteado.short_category_id)
+      .eq('id', post.short_category_id)
       .single()
     imageUrl = tema?.image_url ?? undefined
   }
 
+  await enviarSugestao(bot, texto, kb, imageUrl)
+}
+
+async function publicarColetanea(bot: Bot, colecao: any) {
+  const teaser = limparTeaser(colecao.description)
+  const texto =
+    `📚 *Sugestão de leitura — coletânea*\n\n*${colecao.title}*` +
+    (teaser ? `\n\n_${teaser}_` : '')
+
+  const kb = new InlineKeyboard().url(
+    '👀 Ver os contos desta coletânea',
+    `https://t.me/${BOT_USERNAME}?start=colecao_${colecao.id}`
+  )
+
+  let imageUrl: string | undefined = colecao.image_url ?? undefined
+  if (!imageUrl && colecao.short_category_id) {
+    const { data: tema } = await supabase
+      .from('short_categories')
+      .select('image_url')
+      .eq('id', colecao.short_category_id)
+      .single()
+    imageUrl = tema?.image_url ?? undefined
+  }
+
+  await enviarSugestao(bot, texto, kb, imageUrl)
+}
+
+async function enviarSugestao(bot: Bot, texto: string, kb: InlineKeyboard, imageUrl?: string) {
   if (imageUrl) {
     try {
       await bot.api.sendPhoto(CANAL_ID, imageUrl, {
@@ -162,7 +230,7 @@ export function registrarDivulgacao(bot: Bot) {
     }
   })
 
-  // Agendador: uma sugestão a cada 4 horas
+  // Agendador: uma sugestão por dia
   if (!CANAL_ID) {
     console.warn('CANAL_ID não definido — divulgação automática desativada.')
     return
