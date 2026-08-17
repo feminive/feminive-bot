@@ -16,40 +16,48 @@ function emailValido(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
 }
 
+// Monta a tela de conexão de assinatura. Marca o usuário como aguardando
+// email quando ainda não há vínculo.
+async function montarConectar(userId: number) {
+  const { data: vinculo } = await supabase
+    .from('telegram_assinantes')
+    .select('email')
+    .eq('telegram_user_id', userId)
+    .single()
+
+  if (vinculo) {
+    return {
+      texto: `✅ *Você já é assinante!*\n\nEmail vinculado: \`${vinculo.email}\`\n\nAproveite o acesso completo! 💕`,
+      kb: new InlineKeyboard().text('🏠 Início', 'inicio'),
+    }
+  }
+
+  aguardandoEmail.add(userId)
+
+  return {
+    texto: '📧 *Digite seu email de assinante:*\n\n_Use o mesmo email cadastrado no momento da compra._',
+    kb: new InlineKeyboard().text('❌ Cancelar', 'inicio'),
+  }
+}
+
 export function registrarAssinante(bot: Bot) {
+  // /conectar — mesmo fluxo do botão, para quem chega pelo menu de comandos
+  bot.command('conectar', async (ctx) => {
+    const userId = ctx.from?.id
+    if (!userId || ctx.chat.type !== 'private') return
+
+    const { texto, kb } = await montarConectar(userId)
+    await ctx.reply(texto, { parse_mode: 'Markdown', reply_markup: kb })
+  })
+
   // Botão "Já sou assinante"
   bot.callbackQuery('ja_sou_assinante', async (ctx) => {
     const userId = ctx.from?.id
     if (!userId) return
 
-    // Verifica se já está vinculado
-    const { data: vinculo } = await supabase
-      .from('telegram_assinantes')
-      .select('email')
-      .eq('telegram_user_id', userId)
-      .single()
-
-    if (vinculo) {
-      await ctx.answerCallbackQuery()
-      await ctx.editMessageText(
-        `✅ *Você já é assinante!*\n\nEmail vinculado: \`${vinculo.email}\`\n\nAproveite o acesso completo! 💕`,
-        {
-          parse_mode: 'Markdown',
-          reply_markup: new InlineKeyboard().text('🏠 Início', 'inicio'),
-        }
-      )
-      return
-    }
-
-    aguardandoEmail.add(userId)
+    const { texto, kb } = await montarConectar(userId)
     await ctx.answerCallbackQuery()
-    await ctx.editMessageText(
-      '📧 *Digite seu email de assinante:*\n\n_Use o mesmo email cadastrado no momento da compra._',
-      {
-        parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text('❌ Cancelar', 'inicio'),
-      }
-    )
+    await ctx.editMessageText(texto, { parse_mode: 'Markdown', reply_markup: kb })
   })
 
   // Botão "Ver planos"
