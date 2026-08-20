@@ -91,26 +91,32 @@ async function publicarPost(bot: Bot, post: any) {
     `https://t.me/${BOT_USERNAME}?start=ler_${post.id}`
   )
 
-  // A imagem nunca é a do conto em si — vem da novela/coletânea (novels_pt)
-  // a que ele pertence ou, se for avulso, do tema (short_categories).
-  let imageUrl: string | undefined
+  await publicarNoCanal(bot, texto, kb, await imagemDoPost(post))
+}
+
+// A imagem nunca é a do conto em si — vem da novela/coletânea (novels_pt)
+// a que ele pertence ou, se for avulso, do tema (short_categories).
+export async function imagemDoPost(post: {
+  novel_id?: string | null
+  short_category_id?: string | null
+}): Promise<string | undefined> {
   if (post.novel_id) {
     const { data: novela } = await supabase
       .from('novels_pt')
       .select('image_url')
       .eq('id', post.novel_id)
       .single()
-    imageUrl = novela?.image_url ?? undefined
-  } else if (post.short_category_id) {
+    return novela?.image_url ?? undefined
+  }
+  if (post.short_category_id) {
     const { data: tema } = await supabase
       .from('short_categories')
       .select('image_url')
       .eq('id', post.short_category_id)
       .single()
-    imageUrl = tema?.image_url ?? undefined
+    return tema?.image_url ?? undefined
   }
-
-  await enviarSugestao(bot, texto, kb, imageUrl)
+  return undefined
 }
 
 async function publicarColetanea(bot: Bot, colecao: any) {
@@ -134,10 +140,10 @@ async function publicarColetanea(bot: Bot, colecao: any) {
     imageUrl = tema?.image_url ?? undefined
   }
 
-  await enviarSugestao(bot, texto, kb, imageUrl)
+  await publicarNoCanal(bot, texto, kb, imageUrl)
 }
 
-async function enviarSugestao(bot: Bot, texto: string, kb: InlineKeyboard, imageUrl?: string) {
+export async function publicarNoCanal(bot: Bot, texto: string, kb: InlineKeyboard, imageUrl?: string) {
   if (imageUrl) {
     try {
       await bot.api.sendPhoto(CANAL_ID, imageUrl, {

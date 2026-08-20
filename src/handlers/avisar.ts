@@ -1,10 +1,15 @@
-import { Bot, InlineKeyboard, GrammyError } from 'grammy'
-import { supabase } from '../lib/supabase.js'
+import { Bot, InlineKeyboard } from 'grammy'
+import {
+  PAUSA_MS,
+  broadcastRodando,
+  contarOptOut,
+  dispararParaTodos,
+  listarAtivos,
+} from '../lib/broadcast.js'
+import { comOptOut } from './avisos.js'
 
 const ADMIN_USER_ID = parseInt(process.env.ADMIN_USER_ID ?? '0', 10)
 
-// O Telegram aceita ~30 msg/s no total; 50ms entre envios deixa margem folgada.
-const PAUSA_MS = 50
 // Preview antigo não vale mais — evita confirmar por engano uma mensagem de ontem.
 const VALIDADE_MS = 10 * 60 * 1000
 
@@ -17,35 +22,6 @@ type Pendente = {
 
 // Só o admin dispara broadcast, então um pendente global basta.
 let pendente: Pendente | null = null
-let enviando = false
-
-const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
-// Lista paginada — a tabela vai crescer e o PostgREST corta em 1000 por página.
-async function listarAtivos(): Promise<number[]> {
-  const ids: number[] = []
-  const TAM = 1000
-
-  for (let de = 0; ; de += TAM) {
-    const { data, error } = await supabase
-      .from('usuarios')
-      .select('user_id')
-      .eq('ativo', true)
-      .order('user_id')
-      .range(de, de + TAM - 1)
-
-    if (error) {
-      console.error('Erro ao listar usuários:', error.message)
-      break
-    }
-    if (!data || data.length === 0) break
-
-    ids.push(...data.map((u) => u.user_id))
-    if (data.length < TAM) break
-  }
-
-  return ids
-}
 
 export function registrarAvisar(bot: Bot) {
   // /avisar — manda uma mensagem no privado de todo mundo que já falou com o bot.
@@ -57,7 +33,7 @@ export function registrarAvisar(bot: Bot) {
     if (ctx.chat.type !== 'private') return
     if (!ADMIN_USER_ID || ctx.from?.id !== ADMIN_USER_ID) return
 
-    if (enviando) {
+    if (broadcastRodando()) {
       await ctx.reply('⏳ Já tem um broadcast rodando. Espere ele terminar.')
       return
     }
@@ -91,9 +67,11 @@ export function registrarAvisar(bot: Bot) {
       return
     }
 
-    const teclado = linkCustom
-      ? new InlineKeyboard().url(linkCustom[1], linkCustom[2])
-      : undefined
+    // Todo broadcast vai com a saída fácil: opt-out custa uma linha da lista,
+    // bloqueio custa a leitora inteira (e a reputação do bot no Telegram).
+    const teclado = comOptOut(
+      linkCustom ? new InlineKeyboard().url(linkCustom[1], linkCustom[2]) : undefined
+    )
 
     pendente = {
       chatId: ctx.chat.id,
@@ -118,8 +96,16 @@ export function registrarAvisar(bot: Bot) {
       .text(`✅ Enviar para ${destinatarios.length}`, 'avisar_confirmar')
       .text('❌ Cancelar', 'avisar_cancelar')
 
+    const foraDaLista = await contarOptOut()
+
     await ctx.reply(
-      `☝️ É isso que vai ser enviado${teclado ? ' (com o botão acima)' : ''}.\n\n👥 Destinatários: *${destinatarios.length}*\n⏱ Tempo estimado: ~${Math.ceil((destinatarios.length * PAUSA_MS) / 1000)}s\n\nConfirma o disparo?`,
+      `☝️ É isso que vai ser enviado (o botão de sair dos avisos vai colado em toda mensagem).
+
+👥 Destinatários: *${destinatarios.length}*
+🔕 Fora da lista por opção: *${foraDaLista}*
+⏱ Tempo estimado: ~${Math.ceil((destinatarios.length * PAUSA_MS) / 1000)}s
+
+Confirma o disparo?`,
       { parse_mode: 'Markdown', reply_markup: kb }
     )
   })
@@ -145,72 +131,34 @@ export function registrarAvisar(bot: Bot) {
       await ctx.editMessageText('⌛ Esse preview expirou. Refaça o /avisar.')
       return
     }
-    if (enviando) {
+    if (broadcastRodando()) {
       await ctx.answerCallbackQuery('Já está enviando')
       return
     }
 
     const alvo = pendente
     pendente = null
-    enviando = true
 
     await ctx.answerCallbackQuery('Disparando...')
 
     try {
       const destinatarios = await listarAtivos()
-      const bloquearam: number[] = []
-      let enviadas = 0
-      let erros = 0
-
       await ctx.editMessageText(`📤 Enviando... 0/${destinatarios.length}`)
 
-      for (let i = 0; i < destinatarios.length; i++) {
-        const destino = destinatarios[i]
-
-        try {
-          await ctx.api.copyMessage(destino, alvo.chatId, alvo.messageId, {
+      const r = await dispararParaTodos(
+        destinatarios,
+        (destino) =>
+          ctx.api.copyMessage(destino, alvo.chatId, alvo.messageId, {
             reply_markup: alvo.teclado,
-          })
-          enviadas++
-        } catch (err) {
-          if (err instanceof GrammyError && err.error_code === 403) {
-            // Bloqueou o bot ou apagou a conta — sai da lista.
-            bloquearam.push(destino)
-          } else if (err instanceof GrammyError && err.error_code === 429) {
-            await dormir((err.parameters?.retry_after ?? 5) * 1000)
-            try {
-              await ctx.api.copyMessage(destino, alvo.chatId, alvo.messageId, {
-                reply_markup: alvo.teclado,
-              })
-              enviadas++
-            } catch {
-              erros++
-            }
-          } else {
-            erros++
-          }
-        }
-
-        // Progresso a cada 50 — não dá pra editar mensagem a cada envio (rate limit).
-        if ((i + 1) % 50 === 0) {
+          }),
+        async (feitos, total) => {
           try {
-            await ctx.editMessageText(`📤 Enviando... ${i + 1}/${destinatarios.length}`)
+            await ctx.editMessageText(`📤 Enviando... ${feitos}/${total}`)
           } catch {
             // Editar é só cosmético; se falhar, o envio continua.
           }
         }
-
-        await dormir(PAUSA_MS)
-      }
-
-      // Quem bloqueou sai da lista de uma vez só, não a cada erro.
-      if (bloquearam.length > 0) {
-        const { error } = await supabase
-          .from('usuarios')
-          .update({ ativo: false })
-          .in('user_id', bloquearam)
-        if (error) console.error('Erro ao marcar bloqueados:', error.message)
-      }
+      )
 
       try {
         await ctx.editMessageText(`📤 Envio finalizado — ${destinatarios.length} tentativas.`)
@@ -221,9 +169,9 @@ export function registrarAvisar(bot: Bot) {
       const relatorio = [
         '✅ *Broadcast concluído*',
         '',
-        `📨 Enviadas: *${enviadas}*`,
-        `🚫 Bloquearam o bot: *${bloquearam.length}*`,
-        `⚠️ Erros: *${erros}*`,
+        `📨 Enviadas: *${r.enviadas}*`,
+        `🚫 Bloquearam o bot: *${r.bloquearam}*`,
+        `⚠️ Erros: *${r.erros}*`,
         '',
         `_Quem bloqueou saiu da lista — não entra no próximo._`,
       ].join('\n')
@@ -232,8 +180,6 @@ export function registrarAvisar(bot: Bot) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'desconhecido'
       await ctx.api.sendMessage(alvo.chatId, `❌ Erro no broadcast: ${msg}`)
-    } finally {
-      enviando = false
     }
   })
 }

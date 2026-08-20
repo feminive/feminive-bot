@@ -10,11 +10,13 @@ import { registrarSurpresa } from './handlers/surpresa.js'
 import { registrarAssinante } from './handlers/assinante.js'
 import { registrarCanal } from './handlers/canal.js'
 import { registrarDivulgacao } from './handlers/divulgacao.js'
+import { registrarNovidade } from './handlers/novidade.js'
 import { registrarStats } from './handlers/stats.js'
 import { registrarComandos } from './handlers/comandos.js'
 import { registrarPainel } from './handlers/painel.js'
 import { registrarSuporte } from './handlers/suporte.js'
 import { registrarAvisar } from './handlers/avisar.js'
+import { registrarAvisos } from './handlers/avisos.js'
 import { registrarUsuario } from './lib/usuarios.js'
 import { configurarMenu } from './lib/menu.js'
 
@@ -39,10 +41,12 @@ registrarSurpresa(bot)
 registrarAssinante(bot)
 registrarCanal(bot)
 registrarDivulgacao(bot)
+registrarNovidade(bot)
 registrarStats(bot)
 registrarComandos(bot)
 registrarPainel(bot)
 registrarAvisar(bot)
+registrarAvisos(bot)
 registrarSuporte(bot)
 
 // Botão de início (volta ao menu principal)
