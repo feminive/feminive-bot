@@ -14,3 +14,8 @@ create table if not exists leituras (
 create index if not exists leituras_post_id_idx   on leituras (post_id);
 create index if not exists leituras_criado_em_idx on leituras (criado_em);
 create index if not exists leituras_origem_idx     on leituras (origem);
+
+-- Eventos de leitura não devem ser legíveis pela chave anon.
+-- O bot usa a service key, que ignora RLS — continua funcionando normalmente.
+-- (mesmo padrão de usuarios.sql)
+alter table leituras enable row level security;
