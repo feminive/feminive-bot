@@ -12,6 +12,7 @@ const COMANDOS_PUBLICOS = [
 
 // Comandos que só o admin vê no botão de menu
 const COMANDOS_ADMIN = [
+  { command: 'novidade', description: 'Anunciar conto novo (canal ou privado)' },
   { command: 'start', description: 'Abrir o menu de leitura' },
   { command: 'conectar', description: 'Conectar sua assinatura VIP' },
   { command: 'suporte', description: 'Falar com o suporte' },
@@ -21,7 +22,6 @@ const COMANDOS_ADMIN = [
   { command: 'falar', description: 'Publicar mensagem no canal (sem botão)' },
   { command: 'botao', description: 'Publicar no canal com botão' },
   { command: 'sugerir', description: 'Publicar sugestão de conto no canal' },
-  { command: 'novidade', description: 'Anunciar no canal um episódio novo' },
   { command: 'avisar', description: 'Mandar aviso no privado das leitoras' },
   { command: 'avisos', description: 'Ligar ou desligar avisos no privado' },
 ]
