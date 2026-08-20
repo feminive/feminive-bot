@@ -3,8 +3,9 @@ import { supabase } from './supabase.js'
 
 // O Telegram aceita ~30 msg/s no total; 50ms entre envios deixa margem folgada.
 export const PAUSA_MS = 50
-// De quantos em quantos envios a barra anda. Editar mensagem tem limite proprio,
-// entao nao da pra atualizar a cada envio — 25 mostra movimento sem estourar.
+const PAGINA = 1000
+// De quantos em quantos envios a barra anda. Editar mensagem tem limite próprio,
+// então não dá pra atualizar a cada envio — 25 mostra movimento sem estourar.
 const PASSO_PROGRESSO = 25
 
 const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -22,32 +23,16 @@ export type ResultadoBroadcast = {
   erros: number
 }
 
-// Lista paginada — a tabela vai crescer e o PostgREST corta em 1000 por página.
-// Só entra quem não bloqueou o bot (ativo) E não pediu pra sair dos avisos.
-export async function listarAtivos(): Promise<number[]> {
-  const ids: number[] = []
-  const TAM = 1000
+// Público do broadcast: quem não bloqueou o bot E não pediu pra sair dos avisos.
+export async function contarAtivos(): Promise<number> {
+  const { count, error } = await supabase
+    .from('usuarios')
+    .select('user_id', { count: 'exact', head: true })
+    .eq('ativo', true)
+    .eq('receber_avisos', true)
 
-  for (let de = 0; ; de += TAM) {
-    const { data, error } = await supabase
-      .from('usuarios')
-      .select('user_id')
-      .eq('ativo', true)
-      .eq('receber_avisos', true)
-      .order('user_id')
-      .range(de, de + TAM - 1)
-
-    if (error) {
-      console.error('Erro ao listar usuários:', error.message)
-      break
-    }
-    if (!data || data.length === 0) break
-
-    ids.push(...data.map((u) => u.user_id))
-    if (data.length < TAM) break
-  }
-
-  return ids
+  if (error) throw new Error(error.message)
+  return count ?? 0
 }
 
 // Quantos ainda usam o bot mas desligaram os avisos — termômetro do broadcast.
@@ -57,15 +42,41 @@ export async function contarOptOut(): Promise<number> {
     .select('user_id', { count: 'exact', head: true })
     .eq('ativo', true)
     .eq('receber_avisos', false)
+
   return count ?? 0
 }
 
-// Percorre a lista mandando `enviar` pra cada uma, no ritmo que o Telegram aceita.
-// Quem bloqueou o bot (403) sai da lista no fim, numa tacada só.
-export async function dispararParaTodos(
-  destinatarios: number[],
+// Uma tentativa por leitora, com uma repetição só no flood limit (429).
+async function tentarEnviar(
   enviar: (destino: number) => Promise<unknown>,
-  aoProgredir?: (feitos: number, total: number) => Promise<void>
+  destino: number
+): Promise<'ok' | 'bloqueado' | 'falha'> {
+  for (let tentativa = 0; tentativa < 2; tentativa++) {
+    try {
+      await enviar(destino)
+      return 'ok'
+    } catch (err) {
+      if (err instanceof GrammyError) {
+        // Bloqueou o bot ou apagou a conta.
+        if (err.error_code === 403) return 'bloqueado'
+        // Flood limit: espera o tempo pedido e tenta de novo uma vez.
+        if (err.error_code === 429) {
+          await dormir((err.parameters?.retry_after ?? 5) * 1000)
+          continue
+        }
+      }
+      return 'falha'
+    }
+  }
+  return 'falha'
+}
+
+// Percorre a lista mandando `enviar` pra cada uma, no ritmo que o Telegram aceita.
+// Pagina por cursor (user_id) em vez de offset: como o próprio disparo marca gente
+// como inativa enquanto roda, um offset iria pular linhas no meio do caminho.
+export async function dispararParaTodos(
+  enviar: (destino: number) => Promise<unknown>,
+  aoProgredir?: (feitos: number) => Promise<void>
 ): Promise<ResultadoBroadcast> {
   if (emAndamento) throw new Error('Já tem um broadcast rodando')
   emAndamento = true
@@ -74,40 +85,42 @@ export async function dispararParaTodos(
     const bloquearam: number[] = []
     let enviadas = 0
     let erros = 0
+    let feitos = 0
+    let ultimoId = 0
 
-    for (let i = 0; i < destinatarios.length; i++) {
-      const destino = destinatarios[i]
+    for (;;) {
+      const { data, error } = await supabase
+        .from('usuarios')
+        .select('user_id')
+        .eq('ativo', true)
+        .eq('receber_avisos', true)
+        .gt('user_id', ultimoId)
+        .order('user_id', { ascending: true })
+        .limit(PAGINA)
 
-      try {
-        await enviar(destino)
-        enviadas++
-      } catch (err) {
-        if (err instanceof GrammyError && err.error_code === 403) {
-          // Bloqueou o bot ou apagou a conta — sai da lista.
-          bloquearam.push(destino)
-        } else if (err instanceof GrammyError && err.error_code === 429) {
-          await dormir((err.parameters?.retry_after ?? 5) * 1000)
-          try {
-            await enviar(destino)
-            enviadas++
-          } catch {
-            erros++
-          }
-        } else {
-          erros++
-        }
+      if (error) throw new Error(error.message)
+      if (!data?.length) break
+
+      for (const u of data) {
+        const resultado = await tentarEnviar(enviar, u.user_id)
+        if (resultado === 'ok') enviadas++
+        else if (resultado === 'bloqueado') bloquearam.push(u.user_id)
+        else erros++
+
+        feitos++
+        if (feitos % PASSO_PROGRESSO === 0 && aoProgredir) await aoProgredir(feitos)
+
+        await dormir(PAUSA_MS)
       }
 
-      if ((i + 1) % PASSO_PROGRESSO === 0 && aoProgredir) {
-        await aoProgredir(i + 1, destinatarios.length)
-      }
-
-      await dormir(PAUSA_MS)
+      ultimoId = data[data.length - 1].user_id
+      if (data.length < PAGINA) break
     }
 
+    // Quem bloqueou sai da lista de uma vez só, no fim. O carimbo de data permite
+    // separar, no próximo disparo, quem bloqueou agora de quem já tinha bloqueado
+    // há tempos e só foi descoberto aqui.
     if (bloquearam.length > 0) {
-      // Carimba a data pra dar pra separar, no proximo disparo, quem bloqueou
-      // agora de quem ja tinha bloqueado e so foi descoberto aqui.
       const { error } = await supabase
         .from('usuarios')
         .update({ ativo: false, inativo_em: new Date().toISOString() })

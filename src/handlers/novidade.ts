@@ -6,9 +6,9 @@ import { comOptOut } from './avisos.js'
 import {
   PAUSA_MS,
   broadcastRodando,
+  contarAtivos,
   contarOptOut,
   dispararParaTodos,
-  listarAtivos,
 } from '../lib/broadcast.js'
 
 const ADMIN_USER_ID = parseInt(process.env.ADMIN_USER_ID ?? '0', 10)
@@ -201,13 +201,13 @@ export function registrarNovidade(bot: Bot) {
         }
       }
 
-      const destinatarios = await listarAtivos()
+      const total = await contarAtivos()
       const foraDaLista = await contarOptOut()
 
       const kb = new InlineKeyboard()
         .text('📢 Publicar no canal', `nov_canal_${post.id}`)
         .row()
-        .text(`💌 Mandar no privado (${destinatarios.length})`, `nov_privado_${post.id}`)
+        .text(`💌 Mandar no privado (${total})`, `nov_privado_${post.id}`)
         .row()
         .text('❌ Cancelar', 'nov_cancelar')
 
@@ -215,9 +215,9 @@ export function registrarNovidade(bot: Bot) {
         [
           '☝️ É assim que chega no privado da leitora.',
           '',
-          `👥 Receberiam: *${destinatarios.length}*`,
+          `👥 Receberiam: *${total}*`,
           `🔕 Fora da lista por opção: *${foraDaLista}*`,
-          `⏱ Tempo estimado: ~${Math.ceil((destinatarios.length * PAUSA_MS) / 1000)}s`,
+          `⏱ Tempo estimado: ~${Math.ceil((total * PAUSA_MS) / 1000)}s`,
           '',
           '_No canal vai a versão de sala cheia, sem o botão de sair._',
           '',
@@ -318,10 +318,10 @@ export function registrarNovidade(bot: Bot) {
         return mandar(destino, false)
       }
 
-      const destinatarios = await listarAtivos()
-      await ctx.editMessageText(`📤 Enviando... 0/${destinatarios.length}`)
+      const total = await contarAtivos()
+      await ctx.editMessageText(`📤 Enviando... 0/${total}`)
 
-      const r = await dispararParaTodos(destinatarios, enviar, async (feitos, total) => {
+      const r = await dispararParaTodos(enviar, async (feitos) => {
         try {
           await ctx.editMessageText(`📤 Enviando... ${feitos}/${total}`)
         } catch {
@@ -330,7 +330,7 @@ export function registrarNovidade(bot: Bot) {
       })
 
       try {
-        await ctx.editMessageText(`📤 Envio finalizado — ${destinatarios.length} tentativas.`)
+        await ctx.editMessageText(`📤 Envio finalizado — ${total} tentativas.`)
       } catch {
         // Cosmético.
       }

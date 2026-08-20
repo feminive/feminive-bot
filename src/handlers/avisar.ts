@@ -2,9 +2,9 @@ import { Bot, InlineKeyboard } from 'grammy'
 import {
   PAUSA_MS,
   broadcastRodando,
+  contarAtivos,
   contarOptOut,
   dispararParaTodos,
-  listarAtivos,
 } from '../lib/broadcast.js'
 import { comOptOut } from './avisos.js'
 
@@ -61,8 +61,8 @@ export function registrarAvisar(bot: Bot) {
       return
     }
 
-    const destinatarios = await listarAtivos()
-    if (destinatarios.length === 0) {
+    const total = await contarAtivos()
+    if (total === 0) {
       await ctx.reply('🤷 Nenhum usuário ativo na lista — não tem pra quem mandar.')
       return
     }
@@ -93,7 +93,7 @@ export function registrarAvisar(bot: Bot) {
     }
 
     const kb = new InlineKeyboard()
-      .text(`✅ Enviar para ${destinatarios.length}`, 'avisar_confirmar')
+      .text(`✅ Enviar para ${total}`, 'avisar_confirmar')
       .text('❌ Cancelar', 'avisar_cancelar')
 
     const foraDaLista = await contarOptOut()
@@ -101,9 +101,9 @@ export function registrarAvisar(bot: Bot) {
     await ctx.reply(
       `☝️ É isso que vai ser enviado (o botão de sair dos avisos vai colado em toda mensagem).
 
-👥 Destinatários: *${destinatarios.length}*
+👥 Destinatários: *${total}*
 🔕 Fora da lista por opção: *${foraDaLista}*
-⏱ Tempo estimado: ~${Math.ceil((destinatarios.length * PAUSA_MS) / 1000)}s
+⏱ Tempo estimado: ~${Math.ceil((total * PAUSA_MS) / 1000)}s
 
 Confirma o disparo?`,
       { parse_mode: 'Markdown', reply_markup: kb }
@@ -142,16 +142,15 @@ Confirma o disparo?`,
     await ctx.answerCallbackQuery('Disparando...')
 
     try {
-      const destinatarios = await listarAtivos()
-      await ctx.editMessageText(`📤 Enviando... 0/${destinatarios.length}`)
+      const total = await contarAtivos()
+      await ctx.editMessageText(`📤 Enviando... 0/${total}`)
 
       const r = await dispararParaTodos(
-        destinatarios,
         (destino) =>
           ctx.api.copyMessage(destino, alvo.chatId, alvo.messageId, {
             reply_markup: alvo.teclado,
           }),
-        async (feitos, total) => {
+        async (feitos) => {
           try {
             await ctx.editMessageText(`📤 Enviando... ${feitos}/${total}`)
           } catch {
@@ -161,7 +160,7 @@ Confirma o disparo?`,
       )
 
       try {
-        await ctx.editMessageText(`📤 Envio finalizado — ${destinatarios.length} tentativas.`)
+        await ctx.editMessageText(`📤 Envio finalizado — ${total} tentativas.`)
       } catch {
         // Cosmético.
       }
