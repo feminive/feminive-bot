@@ -7,12 +7,16 @@ create table if not exists usuarios (
   first_name  text,
   ativo       boolean not null default true,   -- false quando o usuário bloqueou o bot
   receber_avisos boolean not null default true, -- false quando pediu pra não receber broadcast
+  inativo_em  timestamptz,                     -- quando o bot descobriu o bloqueio (null = antes de a gente medir)
   criado_em   timestamptz not null default now(),
   visto_em    timestamptz not null default now()
 );
 
 -- Para bancos que já existiam antes do opt-out.
 alter table usuarios add column if not exists receber_avisos boolean not null default true;
+-- Fica nula nas linhas ja marcadas: preencher com a data de hoje diria que todas
+-- bloquearam hoje, o que nao e verdade — elas so foram descobertas de uma vez.
+alter table usuarios add column if not exists inativo_em timestamptz;
 
 create index if not exists usuarios_ativo_idx on usuarios (ativo);
 -- Índice do público do broadcast: ativo (não bloqueou) E que ainda quer receber.

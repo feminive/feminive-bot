@@ -106,9 +106,11 @@ export async function dispararParaTodos(
     }
 
     if (bloquearam.length > 0) {
+      // Carimba a data pra dar pra separar, no proximo disparo, quem bloqueou
+      // agora de quem ja tinha bloqueado e so foi descoberto aqui.
       const { error } = await supabase
         .from('usuarios')
-        .update({ ativo: false })
+        .update({ ativo: false, inativo_em: new Date().toISOString() })
         .in('user_id', bloquearam)
       if (error) console.error('Erro ao marcar bloqueados:', error.message)
     }

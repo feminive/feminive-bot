@@ -22,6 +22,7 @@ export function registrarUsuario(
         username: username ?? null,
         first_name: firstName ?? null,
         ativo: true, // se voltou a falar, está ativo de novo
+        inativo_em: null, // ...e o bloqueio antigo deixa de contar
         visto_em: new Date().toISOString(),
       },
       { onConflict: 'user_id' }
