@@ -3,6 +3,9 @@ import { supabase } from './supabase.js'
 
 // O Telegram aceita ~30 msg/s no total; 50ms entre envios deixa margem folgada.
 export const PAUSA_MS = 50
+// De quantos em quantos envios a barra anda. Editar mensagem tem limite proprio,
+// entao nao da pra atualizar a cada envio — 25 mostra movimento sem estourar.
+const PASSO_PROGRESSO = 25
 
 const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -95,8 +98,7 @@ export async function dispararParaTodos(
         }
       }
 
-      // Progresso a cada 50 — não dá pra editar mensagem a cada envio (rate limit).
-      if ((i + 1) % 50 === 0 && aoProgredir) {
+      if ((i + 1) % PASSO_PROGRESSO === 0 && aoProgredir) {
         await aoProgredir(i + 1, destinatarios.length)
       }
 

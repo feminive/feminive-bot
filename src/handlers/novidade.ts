@@ -281,17 +281,28 @@ export function registrarNovidade(bot: Bot) {
       // Na primeira recusa do Telegram a gente desiste da formatação e segue
       // sem ela — o disparo se conserta sozinho em vez de falhar inteiro.
       let semMarkdown = false
-      const mandar = (destino: number, formatado: boolean) =>
-        imagem
-          ? ctx.api.sendPhoto(destino, imagem, {
-              caption: formatado ? texto : puro,
-              parse_mode: formatado ? 'Markdown' : undefined,
-              reply_markup: teclado,
-            })
-          : ctx.api.sendMessage(destino, formatado ? texto : puro, {
-              parse_mode: formatado ? 'Markdown' : undefined,
-              reply_markup: teclado,
-            })
+      // A primeira leitora recebe a foto por URL e o Telegram devolve um file_id
+      // que vale pras outras 300. Sem isso ele rebaixa a imagem a cada envio —
+      // é o que faz o disparo arrastar no começo.
+      let fileId: string | undefined
+
+      const mandar = async (destino: number, formatado: boolean) => {
+        const legenda = formatado ? texto : puro
+        const parse_mode = formatado ? ('Markdown' as const) : undefined
+
+        if (!imagem) {
+          return ctx.api.sendMessage(destino, legenda, { parse_mode, reply_markup: teclado })
+        }
+
+        const msg = await ctx.api.sendPhoto(destino, fileId ?? imagem, {
+          caption: legenda,
+          parse_mode,
+          reply_markup: teclado,
+        })
+        // photo vem em tamanhos crescentes — o último é o maior.
+        if (!fileId && msg.photo?.length) fileId = msg.photo[msg.photo.length - 1].file_id
+        return msg
+      }
 
       const enviar = async (destino: number) => {
         if (!semMarkdown) {
