@@ -1,4 +1,4 @@
-import { Bot, InlineKeyboard } from 'grammy'
+import { Bot, GrammyError, InlineKeyboard } from 'grammy'
 import { supabase } from '../lib/supabase.js'
 import { BOT_USERNAME } from './start.js'
 import { imagemDoPost, publicarNoCanal } from './divulgacao.js'
@@ -14,8 +14,9 @@ import {
 const ADMIN_USER_ID = parseInt(process.env.ADMIN_USER_ID ?? '0', 10)
 const CANAL_ID = process.env.CANAL_ID ?? ''
 const QUANTIDADE = 5
-// Escolha antiga não vale mais — evita disparar por engano o episódio de ontem.
-const VALIDADE_MS = 10 * 60 * 1000
+// Preview velho não dispara: evita anunciar por engano ao rolar a conversa
+// pra cima e esbarrar no botão de ontem.
+const VALIDADE_S = 10 * 60
 
 type PostNovidade = {
   id: string
@@ -25,19 +26,6 @@ type PostNovidade = {
   novel_id: string | null
   short_category_id: string | null
 }
-
-// O episódio escolhido, esperando você decidir o destino. Só o admin usa: um basta.
-type Escolhido = {
-  postId: string
-  texto: string
-  imagem?: string
-  // Título/teaser com Markdown quebrado derruba o envio inteiro — se o preview só
-  // passou sem formatação, o disparo vai sem formatação também.
-  semMarkdown: boolean
-  criadoEm: number
-}
-
-let escolhido: Escolhido | null = null
 
 // Mesmo tratamento do /sugerir: o banco tem o placeholder literal "description"
 function limparTeaser(description?: string | null): string | undefined {
@@ -121,6 +109,18 @@ export async function publicarNovidade(bot: Bot, postId: string) {
   )
 }
 
+// O id do episódio viaja no próprio botão, não na memória do processo: assim um
+// deploy ou uma queda no meio do caminho não faz você perder a escolha.
+function idDoCallback(data: string, prefixo: string): string {
+  return data.slice(prefixo.length)
+}
+
+// A idade do preview vem da própria mensagem, então também sobrevive a restart.
+function previewExpirado(dataMensagem?: number): boolean {
+  if (!dataMensagem) return false
+  return Date.now() / 1000 - dataMensagem > VALIDADE_S
+}
+
 export function registrarNovidade(bot: Bot) {
   // /novidade — lista os últimos episódios publicados. Escolhe um e decide o
   // destino: canal (rotina, custo zero) ou privado das leitoras (caro, use pouco).
@@ -178,9 +178,6 @@ export function registrarNovidade(bot: Bot) {
       const chatId = ctx.chat!.id
 
       // Preview de verdade: manda pra você exatamente o que ela vai receber.
-      // Se o Markdown quebrar aqui, quebraria em todos os envios — melhor
-      // descobrir agora e mandar o disparo inteiro sem formatação.
-      let semMarkdown = false
       try {
         if (imagem) {
           await ctx.api.sendPhoto(chatId, imagem, {
@@ -195,7 +192,7 @@ export function registrarNovidade(bot: Bot) {
           })
         }
       } catch {
-        semMarkdown = true
+        // Markdown quebrado no título/teaser — mostra sem formatação.
         const puro = texto.replace(/[*_]/g, '')
         if (imagem) {
           await ctx.api.sendPhoto(chatId, imagem, { caption: puro, reply_markup: teclado })
@@ -204,15 +201,13 @@ export function registrarNovidade(bot: Bot) {
         }
       }
 
-      escolhido = { postId: post.id, texto, imagem, semMarkdown, criadoEm: Date.now() }
-
       const destinatarios = await listarAtivos()
       const foraDaLista = await contarOptOut()
 
       const kb = new InlineKeyboard()
-        .text('📢 Publicar no canal', 'nov_canal')
+        .text('📢 Publicar no canal', `nov_canal_${post.id}`)
         .row()
-        .text(`💌 Mandar no privado (${destinatarios.length})`, 'nov_privado')
+        .text(`💌 Mandar no privado (${destinatarios.length})`, `nov_privado_${post.id}`)
         .row()
         .text('❌ Cancelar', 'nov_cancelar')
 
@@ -238,22 +233,15 @@ export function registrarNovidade(bot: Bot) {
 
   bot.callbackQuery('nov_cancelar', async (ctx) => {
     if (ctx.from?.id !== ADMIN_USER_ID) return
-    escolhido = null
     await ctx.answerCallbackQuery('Cancelado')
     await ctx.editMessageText('❌ Anúncio cancelado.')
   })
 
-  bot.callbackQuery('nov_canal', async (ctx) => {
+  bot.callbackQuery(/^nov_canal_(.+)$/, async (ctx) => {
     if (ctx.from?.id !== ADMIN_USER_ID) return
 
-    if (!escolhido) {
-      await ctx.answerCallbackQuery('Nada pendente')
-      await ctx.editMessageText('❌ Não achei o episódio escolhido. Refaça o /novidade.')
-      return
-    }
-
     try {
-      await publicarNovidade(bot, escolhido.postId)
+      await publicarNovidade(bot, idDoCallback(ctx.callbackQuery.data!, 'nov_canal_'))
       await ctx.answerCallbackQuery('✅ Publicado no canal!')
       await ctx.editMessageText('✅ Novidade publicada no canal.')
     } catch (err) {
@@ -262,18 +250,12 @@ export function registrarNovidade(bot: Bot) {
     }
   })
 
-  bot.callbackQuery('nov_privado', async (ctx) => {
+  bot.callbackQuery(/^nov_privado_(.+)$/, async (ctx) => {
     if (ctx.from?.id !== ADMIN_USER_ID) return
 
-    if (!escolhido) {
-      await ctx.answerCallbackQuery('Nada pendente')
-      await ctx.editMessageText('❌ Não achei o episódio escolhido. Refaça o /novidade.')
-      return
-    }
-    if (Date.now() - escolhido.criadoEm > VALIDADE_MS) {
-      escolhido = null
-      await ctx.answerCallbackQuery('Expirou')
-      await ctx.editMessageText('⌛ Essa escolha expirou. Refaça o /novidade.')
+    if (previewExpirado(ctx.callbackQuery.message?.date)) {
+      await ctx.answerCallbackQuery('Preview antigo')
+      await ctx.editMessageText('⌛ Esse preview é antigo demais. Refaça o /novidade.')
       return
     }
     if (broadcastRodando()) {
@@ -281,39 +263,60 @@ export function registrarNovidade(bot: Bot) {
       return
     }
 
-    const alvo = escolhido
-    escolhido = null
+    const postId = idDoCallback(ctx.callbackQuery.data!, 'nov_privado_')
     const chatId = ctx.chat!.id
 
     await ctx.answerCallbackQuery('Disparando...')
 
     try {
-      const teclado = comOptOut(botaoLer(alvo.postId, '📖 Ler agora'))
-      const texto = alvo.semMarkdown ? alvo.texto.replace(/[*_]/g, '') : alvo.texto
-      const parse_mode = alvo.semMarkdown ? undefined : ('Markdown' as const)
-      const imagem = alvo.imagem
+      const post = await buscarPost(postId)
+      if (!post) throw new Error('Conto não encontrado')
+
+      const texto = await textoDoPrivado(post)
+      const puro = texto.replace(/[*_]/g, '')
+      const imagem = await imagemDoPost(post)
+      const teclado = comOptOut(botaoLer(post.id, '📖 Ler agora'))
+
+      // Markdown quebrado no título/teaser derrubaria os 300 envios iguais.
+      // Na primeira recusa do Telegram a gente desiste da formatação e segue
+      // sem ela — o disparo se conserta sozinho em vez de falhar inteiro.
+      let semMarkdown = false
+      const mandar = (destino: number, formatado: boolean) =>
+        imagem
+          ? ctx.api.sendPhoto(destino, imagem, {
+              caption: formatado ? texto : puro,
+              parse_mode: formatado ? 'Markdown' : undefined,
+              reply_markup: teclado,
+            })
+          : ctx.api.sendMessage(destino, formatado ? texto : puro, {
+              parse_mode: formatado ? 'Markdown' : undefined,
+              reply_markup: teclado,
+            })
+
+      const enviar = async (destino: number) => {
+        if (!semMarkdown) {
+          try {
+            return await mandar(destino, true)
+          } catch (err) {
+            // 400 aqui é quase sempre entidade mal formada; outros erros
+            // (bloqueio, rate limit) sobem pro dispararParaTodos tratar.
+            if (!(err instanceof GrammyError) || err.error_code !== 400) throw err
+            semMarkdown = true
+          }
+        }
+        return mandar(destino, false)
+      }
 
       const destinatarios = await listarAtivos()
       await ctx.editMessageText(`📤 Enviando... 0/${destinatarios.length}`)
 
-      const r = await dispararParaTodos(
-        destinatarios,
-        (destino) =>
-          imagem
-            ? ctx.api.sendPhoto(destino, imagem, {
-                caption: texto,
-                parse_mode,
-                reply_markup: teclado,
-              })
-            : ctx.api.sendMessage(destino, texto, { parse_mode, reply_markup: teclado }),
-        async (feitos, total) => {
-          try {
-            await ctx.editMessageText(`📤 Enviando... ${feitos}/${total}`)
-          } catch {
-            // Editar é só cosmético; se falhar, o envio continua.
-          }
+      const r = await dispararParaTodos(destinatarios, enviar, async (feitos, total) => {
+        try {
+          await ctx.editMessageText(`📤 Enviando... ${feitos}/${total}`)
+        } catch {
+          // Editar é só cosmético; se falhar, o envio continua.
         }
-      )
+      })
 
       try {
         await ctx.editMessageText(`📤 Envio finalizado — ${destinatarios.length} tentativas.`)
@@ -329,9 +332,12 @@ export function registrarNovidade(bot: Bot) {
           `📨 Enviadas: *${r.enviadas}*`,
           `🚫 Bloquearam o bot: *${r.bloquearam}*`,
           `⚠️ Erros: *${r.erros}*`,
+          semMarkdown ? '\n_Mandei sem formatação: o título ou o teaser tem * ou _ solto._' : '',
           '',
           '_Quem clicou em "não desejo receber mais" saiu só dos avisos — continua lendo normalmente._',
-        ].join('\n'),
+        ]
+          .filter(Boolean)
+          .join('\n'),
         { parse_mode: 'Markdown' }
       )
     } catch (err) {
